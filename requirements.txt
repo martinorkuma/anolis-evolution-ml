@@ -1,11 +1,8 @@
 pandas
-pyyaml
+numpy
 scikit-learn
 matplotlib
+seaborn
+pyyaml
 joblib
-
-python -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-chmod +x scripts/download_data.sh run_pipeline.sh
-./run_pipeline.sh
+requests
