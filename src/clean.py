@@ -1,4 +1,4 @@
-# Data cleaning: load raw morphology data, clean, and save processed CSV.
+# Data cleaning: load raw morphology data, merge ecomorph labels, save processed CSV.
 
 from pathlib import Path
 import argparse
@@ -22,7 +22,7 @@ def _try_read(path: Path, sep: str, nrows=None) -> pd.DataFrame | None:
 
 
 def find_morphology_csv(manifest_csv: Path) -> tuple[Path, str]:
-    """Pick the best candidate tabular file containing morphology + ecomorph."""
+    """Pick the best candidate tabular file containing morphology traits."""
     if not manifest_csv.exists():
         raise FileNotFoundError(
             f"Missing manifest: {manifest_csv}\nRun src/ingest.py first."
@@ -30,6 +30,9 @@ def find_morphology_csv(manifest_csv: Path) -> tuple[Path, str]:
 
     manifest = pd.read_csv(manifest_csv)
     tabular = manifest[manifest["suffix"].isin([".csv", ".tsv", ".txt"])]
+
+    # Exclude macOS resource-fork files (._*) that hide in archives zipped on Macs
+    tabular = tabular[~tabular["file_name"].str.startswith("._")]
 
     if tabular.empty:
         raise FileNotFoundError("No CSV/TSV/TXT files found in extracted data.")
@@ -59,18 +62,18 @@ def find_morphology_csv(manifest_csv: Path) -> tuple[Path, str]:
     if not candidates:
         raise ValueError("Could not parse any tabular files in extracted data.")
 
-    # Rank: ecomorph column first, then most numeric trait cols, then largest file
+    # Rank: most numeric trait cols, then largest file
     candidates.sort(
-        key=lambda c: (c["has_ecomorph"], c["n_numeric"], c["size_bytes"]),
+        key=lambda c: (c["n_numeric"], c["size_bytes"]),
         reverse=True,
     )
     best = candidates[0]
-    print(f"Selected source file: {best['path']} (sep='{best['sep']}')")
+    print(f"Selected morphology file: {best['path']} (sep='{best['sep']}')")
     return best["path"], best["sep"]
 
 
 def clean_dataframe(df: pd.DataFrame) -> pd.DataFrame:
-    """Standardize columns, drop empties, drop rows missing the target label."""
+    """Standardize columns and drop empty rows/cols."""
     # Normalize column names
     df.columns = [c.strip().lower().replace(" ", "_") for c in df.columns]
 
@@ -81,19 +84,43 @@ def clean_dataframe(df: pd.DataFrame) -> pd.DataFrame:
     for col in df.select_dtypes(include="object").columns:
         df[col] = df[col].astype(str).str.strip()
 
-    # Locate target column and rename to canonical 'ecomorph'
-    target_candidates = [c for c in df.columns if "ecomorph" in c or "ecotype" in c]
-    if target_candidates:
-        target_col = target_candidates[0]
-        before = len(df)
-        df = df[df[target_col].notna() & (df[target_col].str.lower() != "nan")]
-        print(f"Dropped {before - len(df)} rows missing '{target_col}'.")
-        if target_col != "ecomorph":
-            df = df.rename(columns={target_col: "ecomorph"})
-    else:
-        print("Warning: no ecomorph/ecotype column found — train.py will fall back to its candidate list.")
-
     return df.reset_index(drop=True)
+
+
+def load_ecomorph_table(extract_dir: Path) -> pd.DataFrame:
+    """Load the traditional ecomorph classification (no header in source file).
+
+    Source file format: species,idx,ecomorph_code
+    Ecomorph codes: CG (crown-giant), GB (grass-bush), TC (trunk-crown),
+    TG (trunk-ground), TR (trunk), TW (twig), U (unique / unclassified).
+    """
+    ecomorph_path = (
+        extract_dir / "Mahler_et_al_2013_Data" / "GA_Anolis_trad_ecomorph_class.csv"
+    )
+    if not ecomorph_path.exists():
+        raise FileNotFoundError(
+            f"Missing ecomorph classification file: {ecomorph_path}"
+        )
+
+    ecomorph_df = pd.read_csv(
+        ecomorph_path,
+        header=None,
+        names=["species", "idx", "ecomorph"],
+    )
+
+    # Normalize whitespace in string columns
+    for col in ["species", "ecomorph"]:
+        ecomorph_df[col] = ecomorph_df[col].astype(str).str.strip()
+
+    # Drop "unique" species — they're not part of any ecomorph class
+    n_before = len(ecomorph_df)
+    ecomorph_df = ecomorph_df[ecomorph_df["ecomorph"] != "U"].copy()
+    print(
+        f"Ecomorph table: {len(ecomorph_df)} classified species "
+        f"({n_before - len(ecomorph_df)} 'U'/unique dropped)"
+    )
+
+    return ecomorph_df[["species", "ecomorph"]]
 
 
 def main(config_path: str) -> None:
@@ -101,18 +128,43 @@ def main(config_path: str) -> None:
 
     manifest_csv = Path(cfg["data"]["manifest_csv"])
     cleaned_csv = Path(cfg["data"]["cleaned_csv"])
+    extract_dir = Path(cfg["data"]["extract_dir"])
 
+    # 1. Load + clean the morphology table
     src_path, sep = find_morphology_csv(manifest_csv)
+    traits_df = pd.read_csv(src_path, sep=sep, engine="python")
+    print(f"Loaded raw morphology: {traits_df.shape[0]} rows x {traits_df.shape[1]} cols")
+    traits_df = clean_dataframe(traits_df)
 
-    df = pd.read_csv(src_path, sep=sep, engine="python")
-    print(f"Loaded raw data: {df.shape[0]} rows x {df.shape[1]} cols")
+    if "species" not in traits_df.columns:
+        raise ValueError(
+            f"No 'species' column in morphology file. Found: {list(traits_df.columns)}"
+        )
 
-    cleaned = clean_dataframe(df)
-    print(f"Cleaned data:    {cleaned.shape[0]} rows x {cleaned.shape[1]} cols")
+    # 2. Load the ecomorph classification (separate file, no header)
+    ecomorph_df = load_ecomorph_table(extract_dir)
+
+    # 3. Inner-join on species — keep only rows with both traits and a label
+    cleaned = traits_df.merge(ecomorph_df, on="species", how="inner")
+    print(
+        f"Merged: {len(cleaned)} rows "
+        f"(traits had {len(traits_df)}, ecomorph had {len(ecomorph_df)})"
+    )
+
+    if cleaned.empty:
+        raise ValueError(
+            "Merge produced 0 rows. Check that species names match between "
+            "the morphology and ecomorph tables."
+        )
+
+    # 4. Sanity check the class distribution before saving
+    print("\nEcomorph class counts:")
+    print(cleaned["ecomorph"].value_counts().to_string())
 
     cleaned_csv.parent.mkdir(parents=True, exist_ok=True)
     cleaned.to_csv(cleaned_csv, index=False)
-    print(f"Wrote cleaned data: {cleaned_csv}")
+    print(f"\nWrote cleaned data: {cleaned_csv}")
+    print(f"Final shape: {cleaned.shape[0]} rows x {cleaned.shape[1]} cols")
 
 
 if __name__ == "__main__":
