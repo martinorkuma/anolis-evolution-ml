@@ -1,0 +1,85 @@
+{
+  "target_column": "ecomorph",
+  "n_rows": 82,
+  "n_features": 13,
+  "n_classes": 6,
+  "classes": [
+    "CG",
+    "GB",
+    "T",
+    "TC",
+    "TG",
+    "TW"
+  ],
+  "accuracy": 0.8571428571428571,
+  "macro_f1": 0.7226292226292227,
+  "weighted_f1": 0.8359206930635501,
+  "classification_report": {
+    "CG": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1-score": 1.0,
+      "support": 3.0
+    },
+    "GB": {
+      "precision": 1.0,
+      "recall": 0.8,
+      "f1-score": 0.8888888888888888,
+      "support": 5.0
+    },
+    "T": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1-score": 0.0,
+      "support": 1.0
+    },
+    "TC": {
+      "precision": 0.75,
+      "recall": 1.0,
+      "f1-score": 0.8571428571428571,
+      "support": 3.0
+    },
+    "TG": {
+      "precision": 0.8571428571428571,
+      "recall": 1.0,
+      "f1-score": 0.9230769230769231,
+      "support": 6.0
+    },
+    "TW": {
+      "precision": 0.6666666666666666,
+      "recall": 0.6666666666666666,
+      "f1-score": 0.6666666666666666,
+      "support": 3.0
+    },
+    "accuracy": 0.8571428571428571,
+    "macro avg": {
+      "precision": 0.7123015873015873,
+      "recall": 0.7444444444444445,
+      "f1-score": 0.7226292226292227,
+      "support": 21.0
+    },
+    "weighted avg": {
+      "precision": 0.8282312925170068,
+      "recall": 0.8571428571428571,
+      "f1-score": 0.8359206930635501,
+      "support": 21.0
+    }
+  },
+  "numeric_features": [
+    "avg_svl",
+    "avg_femur",
+    "avg_tibia",
+    "avg_met",
+    "avg_ltoe_iv",
+    "avg_humerus",
+    "avg_radius",
+    "avg_lfing_iv",
+    "foot_lam_num",
+    "hand_lam_num",
+    "avg_lnsvl2",
+    "avg_ln_t1"
+  ],
+  "categorical_features": [
+    "species"
+  ]
+}

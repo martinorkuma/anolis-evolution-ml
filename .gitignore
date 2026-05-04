@@ -116,10 +116,7 @@ models/
 
 # ============================================================
 # Pipeline outputs / results / figures
-# Often you DO want figures tracked — leave 'figures/' off this list
-# if you want them in git. Same for reports/.
 # ============================================================
-outputs/
 results/
 runs/
 wandb/
