@@ -2,18 +2,20 @@
 
 **End-to-End Biological Data Science Pipeline**
 
-This project builds a reproducible machine learning pipeline to classify *Anolis* lizard ecological groups (ecomorphs) from morphological traits. Using publicly available morphology datasets from Figshare, the workflow covers data ingestion, validation, cleaning, feature engineering, model training, and evaluation.
+This project builds a reproducible machine learning pipeline to classify Anolis lizard ecological groups (ecomorphs) from morphological traits. 
+It uses the publicly available morphology dataset from Mahler et al. (2013), hosted on Dryad. 
+The workflow covers data ingestion, validation, cleaning, feature engineering, model training, and evaluation.
 
-The pipeline is fully automated via Bash and Python, producing versioned outputs (cleaned data, trained models, metrics, and figures). A Random Forest classifier is used as a baseline to quantify how well morphology predicts ecological adaptation, with results interpreted in an evolutionary context.
+The pipeline is config-driven and orchestrated by Bash and Python, producing versioned outputs (cleaned data, trained models, metrics, and figures). 
+A Random Forest classifier is used as a baseline to quantify how well morphology predicts ecological adaptation, with results interpreted in an evolutionary context.
 
 **Key components**
 
-- Reproducible Bash-driven pipeline (`run_pipeline.sh`)
+- Bash-orchestrated pipeline (`scripts/run_pipeline.sh`)
 - Config-driven workflow (`configs/dataset.yaml`)
-- Data validation + manifest generation
+- Data verification + manifest generation
 - Supervised ML (Random Forest)
 - Metrics + confusion matrix outputs
-- Clean repo structure for team or solo extension
 
 
 **Goal**
@@ -21,58 +23,94 @@ The pipeline is fully automated via Bash and Python, producing versioned outputs
 Demonstrate an end-to-end biological data science workflow that connects phenotype → ecology using machine learning, in a format suitable for extension to comparative or evolutionary genomics projects.
 
 
-## Pipeline Overview
+### Quickstart 
 
-This project uses a Bash-driven, Python-based pipeline for an end-to-end biological data science workflow. The pipeline downloads morphology data, validates the raw files, cleans and prepares the dataset, trains a baseline machine learning model, and saves evaluation outputs.
+```Bash
+# 1. Install dependencies
+pip install -r requirements.txt
 
-The workflow is organized into reproducible stages:
+# 2. Manually download the dataset (see "Get the Data" below) and place the zip at: data/raw/Mahler_et_al_2013_Data.zip
 
-1. **Ingest data**
-   - Downloads the source morphology dataset.
-   - Saves raw input files under `data/raw/`.
+# 3. Run the full pipeline
+bash scripts/run_pipeline.sh
+```
 
-2. **Validate data**
-   - Checks that expected files exist.
-   - Creates a raw data manifest.
-   - Flags missing or malformed inputs.
+### Get the Data
 
-3. **Prepare features**
-   - Cleans the raw morphology table.
-   - Selects relevant morphological traits.
-   - Encodes the target label, such as ecomorph class.
-   - Saves processed datasets under `data/processed/`.
+The dataset is not auto-downloaded. Dryad's file-download endpoint sits behind a JavaScript anti-bot challenge that command-line tools
+(curl, wget) cannot bypass, so the pipeline expects the zip to be placed manually.
 
-4. **Train model**
-   - Trains a baseline Random Forest classifier.
-   - Uses morphology traits to predict Anolis ecological group/ecomorph.
-   - Saves the trained model under `outputs/models/`.
+To get the data:
 
-5. **Evaluate model**
-   - Generates model performance metrics.
-   - Saves confusion matrix and summary outputs.
-   - Writes results under `outputs/metrics/` and `outputs/figures/`.
+1. Open the dataset page in a browser: https://datadryad.org/dataset/doi:10.5061/dryad.9g182
+2. Click Download dataset to get the zip.
+3. Move the file to: data/raw/Mahler_et_al_2013_Data.zip (rename it if the downloaded filename differs)
 
-## Repository Structure
+`scripts/verify_data.sh` runs as the first pipeline step and will fail fast with these instructions if the zip is missing or malformed.
+
+
+### Pipeline Overview
+
+The pipeline is organized into four reproducible stages, all driven by `scripts/run_pipeline.sh` and configured via `configs/dataset.yaml`. 
+Each stage logs to `outputs/logs/`.
+
+1. **Verify data** (`scripts/verify_data.sh`)
+   - Confirms the manually-downloaded dataset zip exists at the configured path.
+   - Validates that the file is a real zip archive (not a stray HTML challenge page).
+   - Fails fast with download instructions if anything is wrong. 
+
+2. Ingest data (`src/ingest.py`)
+   - Extracts the raw zip to `data/raw/Mahler_et_al_2013_Data/`.
+   - Walks the extracted tree and writes a manifest of every file (name, path, type, size) to `data/interim/manifest.csv`.
+
+3. Clean data (`src/clean.py`)
+   - Loads the relevant raw morphology table from the extracted dataset.
+   - Selects morphological trait columns and encodes the ecomorph label.
+   - Writes the modeling-ready table to `data/processed/anolis_cleaned.csv`.
+
+4. Train and evaluate model (`src/train.py`)
+
+   - Splits the cleaned data into train/test sets.
+   - Builds a ColumnTransformer + Random Forest pipeline (median imputation + scaling for numerics, mode imputation + one-hot for categoricals).
+   - Saves the fitted pipeline to outputs/models/random_forest_anolis.joblib.
+   - Writes accuracy, macro/weighted F1, and a full classification report to outputs/metrics/model_metrics.json.
+   - Saves a confusion matrix figure to outputs/figures/confusion_matrix.png.
+
+### Repository Structure
 
 ```text
 anolis-evolution-ml/
 ├── configs/
 │   └── dataset.yaml
 ├── data/
-│   ├── raw/
-│   └── processed/
+│   ├── raw/              # input data (gitignored)
+│   ├── interim/          # manifests, intermediate files (gitignored)
+│   └── processed/        # cleaned modeling tables (gitignored)
 ├── outputs/
-│   ├── figures/
-│   ├── metrics/
-│   └── models/
+│   ├── figures/          # confusion matrix, plots
+│   ├── logs/             # per-stage stdout/stderr
+│   ├── metrics/          # model_metrics.json
+│   └── models/           # serialized .joblib pipelines
 ├── scripts/
-│   ├── download_data.sh
-│   └── run_pipeline.sh
+│   ├── verify_data.sh    # checks manual download is in place
+│   └── run_pipeline.sh   # orchestrates all four stages
 ├── src/
-│   ├── validate_data.py
-│   ├── prepare_features.py
-│   ├── train_model.py
-│   └── evaluate_model.py
-├── environment.yml
+│   ├── ingest.py         # unzip + manifest
+│   ├── clean.py          # build modeling-ready CSV
+│   └── train.py          # train + evaluate + serialize
+├── requirements.txt
+├── LICENSE
 └── README.md
+```
 
+### References
+
+Mahler, D. L., Ingram, T., Revell, L. J., & Losos, J. B. (2013). 
+Exceptional convergence on the macroevolutionary landscape in island lizard radiations. Science, 341(6143), 292–295. 
+https://doi.org/10.1126/science.1232392
+
+Data package: https://doi.org/10.5061/dryad.9g182
+
+### License
+
+This project is released under the Apache License 2.0. See `LICENSE` for the full text.

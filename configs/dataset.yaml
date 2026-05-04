@@ -3,14 +3,13 @@ project:
   species_group: Anolis
   task: classify_ecomorph_from_morphology
 data:
-  source_name: "Analyses of the Anolis dataset"
-  source_url: "https://figshare.com/articles/dataset/Analyses_of_the_Anolis_dataset/4587259"
-  download_url: "https://figshare.com/ndownloader/articles/4587259/versions/1"
+  source_name: "Mahler et al. 2013 — Anolis morphology"
+  source_url: "https://datadryad.org/dataset/doi:10.5061/dryad.9g182"
   raw_dir: "data/raw"
   interim_dir: "data/interim"
   processed_dir: "data/processed"
-  raw_zip: "data/raw/anolis_figshare.zip"
-  extract_dir: "data/raw/anolis_figshare"
+  raw_zip: "data/raw/Mahler_et_al_2013_Data.zip"
+  extract_dir: "data/raw/Mahler_et_al_2013_Data"
   manifest_csv: "data/interim/manifest.csv"
   cleaned_csv: "data/processed/anolis_cleaned.csv"
 model:
@@ -22,3 +21,4 @@ outputs:
   metrics_json: "outputs/metrics/model_metrics.json"
   confusion_matrix_png: "outputs/figures/confusion_matrix.png"
   model_path: "outputs/models/random_forest_anolis.joblib"
+  
