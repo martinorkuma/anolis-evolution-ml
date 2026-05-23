@@ -115,7 +115,7 @@ models/
 *.pb
 
 # ============================================================
-# Pipeline outputs / results / figures
+# Pipeline outputs / results 
 # ============================================================
 results/
 runs/
